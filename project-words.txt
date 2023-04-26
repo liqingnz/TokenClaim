@@ -24,3 +24,5 @@ snakecase
 solhint
 typechain
 xdai
+merkle
+keccak

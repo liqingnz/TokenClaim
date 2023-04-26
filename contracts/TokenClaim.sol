@@ -49,6 +49,10 @@ contract TokenClaim is Ownable {
         ++eventIndex;
     }
 
+    function updateMerkleRoot(uint256 _eventIndex, bytes32 _merkleRoot) public onlyOwner {
+        claimEvents[_eventIndex].merkleRoot = _merkleRoot;
+    }
+
     function withdrawToken(address _token, uint256 _amount) public onlyOwner {
         IERC20(_token).transfer(msg.sender, _amount);
     }
