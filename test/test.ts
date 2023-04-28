@@ -4,6 +4,8 @@ import { ethers, network } from "hardhat";
 import { MerkleTree } from "merkletreejs";
 import { MaskToken, MaskToken__factory, TokenClaim, TokenClaim__factory } from "../types";
 
+const ONE_ETH = utils.parseEther("1");
+
 describe("TokenClaim", () => {
   let snapshotId: string;
   let deployer: Signer;
@@ -33,17 +35,11 @@ describe("TokenClaim", () => {
     await maskToken.transfer(tokenClaimContract.address, utils.parseEther("100"));
     expect(await maskToken.balanceOf(tokenClaimContract.address)).to.be.eq(utils.parseEther("100"));
 
-    airdropList.push(
-      utils.keccak256(utils.solidityPack(["address", "uint256"], [signer1Address, utils.parseEther("1")])),
-    );
-    airdropList.push(
-      utils.keccak256(utils.solidityPack(["address", "uint256"], [signer2Address, utils.parseEther("1")])),
-    );
-    airdropList.push(
-      utils.keccak256(utils.solidityPack(["address", "uint256"], [signer3Address, utils.parseEther("1")])),
-    );
-    merkleTree = new MerkleTree(airdropList, utils.keccak256);
-    merkleRoot = "0x" + merkleTree.getRoot().toString("hex");
+    airdropList.push(utils.keccak256(utils.solidityPack(["address", "uint256"], [signer1Address, ONE_ETH])));
+    airdropList.push(utils.keccak256(utils.solidityPack(["address", "uint256"], [signer2Address, ONE_ETH])));
+    airdropList.push(utils.keccak256(utils.solidityPack(["address", "uint256"], [signer3Address, ONE_ETH])));
+    merkleTree = new MerkleTree(airdropList, utils.keccak256, { sortPairs: true });
+    merkleRoot = merkleTree.getHexRoot();
   });
 
   beforeEach(async () => {
@@ -67,9 +63,9 @@ describe("TokenClaim", () => {
   });
 
   it("Time check", async () => {
-    let leaf = utils.keccak256(utils.solidityPack(["address", "uint256"], [signer1Address, utils.parseEther("1")]));
-    expect(merkleTree.verify(merkleTree.getProof(leaf), leaf, merkleRoot)).to.be.true;
+    let leaf = utils.keccak256(utils.solidityPack(["address", "uint256"], [signer1Address, ONE_ETH]));
     let proof = merkleTree.getHexProof(leaf);
+    expect(merkleTree.verify(proof, leaf, merkleRoot)).to.be.true;
     let index = await tokenClaimContract.eventIndex();
     expect(index).to.be.eq(BigNumber.from(0));
 
@@ -90,15 +86,15 @@ describe("TokenClaim", () => {
     );
     expect(await tokenClaimContract.eventIndex()).to.be.eq(index.add(1));
     expect(await maskToken.balanceOf(signer1Address)).to.be.eq(BigNumber.from(0));
-    await expect(tokenClaimContract.claim(index, proof, signer1Address, utils.parseEther("1"))).to.be.revertedWith(
+    await expect(tokenClaimContract.claim(index, proof, signer1Address, ONE_ETH)).to.be.revertedWith(
       "TokenClaim: Have not started!",
     );
   });
 
   it("Claim Test", async () => {
-    let leaf = utils.keccak256(utils.solidityPack(["address", "uint256"], [signer1Address, utils.parseEther("1")]));
-    expect(merkleTree.verify(merkleTree.getProof(leaf), leaf, merkleRoot)).to.be.true;
+    let leaf = utils.keccak256(utils.solidityPack(["address", "uint256"], [signer1Address, ONE_ETH]));
     let proof = merkleTree.getHexProof(leaf);
+    expect(merkleTree.verify(proof, leaf, merkleRoot)).to.be.true;
     let index = await tokenClaimContract.eventIndex();
     expect(index).to.be.eq(BigNumber.from(0));
     await tokenClaimContract["setupEvent(address,uint256,bytes32)"](
@@ -116,18 +112,18 @@ describe("TokenClaim", () => {
 
     // Success
     expect(await tokenClaimContract.isClaimed(index, signer1Address)).to.be.false;
-    await tokenClaimContract.claim(index, proof, signer1Address, utils.parseEther("1"));
+    await tokenClaimContract.claim(index, proof, signer1Address, ONE_ETH);
     expect(await tokenClaimContract.isClaimed(index, signer1Address)).to.be.true;
-    expect(await maskToken.balanceOf(signer1Address)).to.be.eq(utils.parseEther("1"));
+    expect(await maskToken.balanceOf(signer1Address)).to.be.eq(ONE_ETH);
 
     // Fail Case: already claimed
-    await expect(tokenClaimContract.claim(index, proof, signer1Address, utils.parseEther("1"))).to.be.revertedWith(
+    await expect(tokenClaimContract.claim(index, proof, signer1Address, ONE_ETH)).to.be.revertedWith(
       "TokenClaim: Already claimed!",
     );
 
-    leaf = utils.keccak256(utils.solidityPack(["address", "uint256"], [signer2Address, utils.parseEther("1")]));
-    expect(merkleTree.verify(merkleTree.getProof(leaf), leaf, merkleRoot)).to.be.true;
+    leaf = utils.keccak256(utils.solidityPack(["address", "uint256"], [signer2Address, ONE_ETH]));
     proof = merkleTree.getHexProof(leaf);
+    expect(merkleTree.verify(proof, leaf, merkleRoot)).to.be.true;
     index = await tokenClaimContract.eventIndex();
     expect(index).to.be.eq(BigNumber.from(1));
     await tokenClaimContract["setupEvent(address,uint256,bytes32)"](
@@ -140,13 +136,13 @@ describe("TokenClaim", () => {
 
     // Fail Case: expired
     await network.provider.send("evm_increaseTime", [1001]);
-    await expect(tokenClaimContract.claim(index, proof, signer2Address, utils.parseEther("1"))).to.be.revertedWith(
+    await expect(tokenClaimContract.claim(index, proof, signer2Address, ONE_ETH)).to.be.revertedWith(
       "TokenClaim: Expired!",
     );
   });
 
   it("Update merkle root", async () => {
-    let leaf = utils.keccak256(utils.solidityPack(["address", "uint256"], [signer1Address, utils.parseEther("1")]));
+    let leaf = utils.keccak256(utils.solidityPack(["address", "uint256"], [signer1Address, ONE_ETH]));
     let index = await tokenClaimContract.eventIndex();
     let proof = merkleTree.getHexProof(leaf);
 
@@ -157,15 +153,15 @@ describe("TokenClaim", () => {
     );
 
     const beforeClaimSnapshot = await network.provider.send("evm_snapshot", []);
-    await tokenClaimContract.claim(index, proof, signer1Address, utils.parseEther("1")); // make sure signer1 can claim
+    await tokenClaimContract.claim(index, proof, signer1Address, ONE_ETH); // make sure signer1 can claim
     await network.provider.send("evm_revert", [beforeClaimSnapshot]);
 
     const newList = airdropList.slice(1, 3); // remove signer1 from the list
-    let tree = new MerkleTree(newList, utils.keccak256);
+    let tree = new MerkleTree(newList, utils.keccak256, { sortPairs: true });
     let root = "0x" + tree.getRoot().toString("hex");
     expect(tree.verify(tree.getProof(leaf), leaf, root)).to.be.false;
     await tokenClaimContract.updateMerkleRoot(index, root);
-    await expect(tokenClaimContract.claim(index, proof, signer1Address, utils.parseEther("1"))).to.be.revertedWith(
+    await expect(tokenClaimContract.claim(index, proof, signer1Address, ONE_ETH)).to.be.revertedWith(
       "TokenClaim: Unable to verify",
     );
   });

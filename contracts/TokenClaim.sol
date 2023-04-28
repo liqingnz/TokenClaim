@@ -2,8 +2,8 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 
 contract TokenClaim is Ownable {
     struct ClaimEvent {
@@ -73,10 +73,10 @@ contract TokenClaim is Ownable {
         require(!claimEvent.claimedAddresses[_claimer], "TokenClaim: Already claimed!");
 
         bytes32 leaf = keccak256(abi.encodePacked(_claimer, _amount));
-        require(MerkleProof.verify(_merkleProof, claimEvent.merkleRoot, leaf), "TokenClaim: Unable to verify");
+        require(MerkleProof.verifyCalldata(_merkleProof, claimEvent.merkleRoot, leaf), "TokenClaim: Unable to verify.");
 
         claimEvent.claimedAddresses[_claimer] = true;
-        IERC20(claimEvent.token).transfer(_claimer, _amount);
+        require(IERC20(claimEvent.token).transfer(_claimer, _amount), "TokenClaim: trasnfer failed.");
         emit Claimed(_eventIndex, _claimer, _amount);
     }
 }
